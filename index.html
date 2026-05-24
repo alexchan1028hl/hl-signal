@@ -455,11 +455,25 @@ table.cpd tr.cpd-hit td{background:var(--gdim);color:var(--g);font-weight:700;bo
   #main.split{grid-template-columns:1fr}
   #deepPane{
     position:fixed!important;
-    inset:0;
+    /* inset:0 but push down for iOS notch / Dynamic Island */
+    top:0;left:0;right:0;bottom:0;
     z-index:500;
-    overflow-y:auto;
+    /* scroll (not auto) + momentum scrolling — critical for iOS Safari */
+    overflow-y:scroll;
+    -webkit-overflow-scrolling:touch;
     border-left:none;
-    padding-bottom:env(safe-area-inset-bottom)
+    /* Safe-area padding so content never hides behind notch or home bar */
+    padding-top:env(safe-area-inset-top);
+    padding-bottom:env(safe-area-inset-bottom);
+    box-sizing:border-box
+  }
+  /* Sticky header must compensate for the top safe-area padding on iOS */
+  #deepPane .dp-hdr{
+    position:sticky;
+    top:0;
+    /* Pull header back to sit flush at top of pane's padded content area */
+    margin-top:calc(-1 * env(safe-area-inset-top));
+    padding-top:calc(10px + env(safe-area-inset-top));
   }
   /* Prevent scroll bleed on screener while deep pane is open */
   #main.split #screenerPane{overflow:hidden;height:100dvh}
@@ -541,8 +555,8 @@ table.cpd tr.cpd-hit td{background:var(--gdim);color:var(--g);font-weight:700;bo
   /* Price: allow to compress slightly */
   table.sc td:nth-child(3){font-size:.78rem}
 
-  /* Deep pane: tighter padding */
-  .dp-hdr{padding:10px 12px}
+  /* Deep pane: tighter padding (safe-area top inherited from 768px rule) */
+  .dp-hdr{padding:10px 12px;padding-top:calc(10px + env(safe-area-inset-top))}
   .dp-sec{padding:10px 12px}
   .dp-sec-title{margin-bottom:7px}
 }
@@ -3174,6 +3188,8 @@ async function selectTicker(coin) {
   pane.style.display = '';
   mainEl.classList.add('split');
   destroyCharts();
+  // Always scroll to top when opening a new ticker (iOS retains scroll pos)
+  pane.scrollTop = 0;
   pane.innerHTML = '<div class="state-banner"><div class="spinner"></div><span>Loading ' + coin + '…</span></div>';
 
   try {
