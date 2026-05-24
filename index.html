@@ -714,12 +714,20 @@ table.cpd tr.cpd-hit td{background:var(--gdim);color:var(--g);font-weight:700;bo
 /* ── API ──────────────────────────────────────────────────────────────────── */
 const HL = 'https://api.hyperliquid.xyz/info';
 
-async function hlPost(body) {
+async function hlPost(body, _retry = 0) {
   const r = await fetch(HL, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body)
   });
+  if (r.status === 429) {
+    if (_retry >= 4) throw new Error('HL API 429 — rate limited');
+    // Exponential back-off: 1s, 2s, 4s, 8s
+    const wait = 1000 * Math.pow(2, _retry);
+    console.warn('[HL] 429 rate-limited — retrying in', wait + 'ms', body.type);
+    await new Promise(res => setTimeout(res, wait));
+    return hlPost(body, _retry + 1);
+  }
   if (!r.ok) throw new Error('HL API ' + r.status);
   return r.json();
 }
@@ -3114,7 +3122,8 @@ async function loadMarkets() {
     // Check alerts after REST update (WS checks on every tick too)
     AL.check(S.markets, S.signals);
     // Refresh wallet positions on each market reload
-    if (_walletAddr) fetchWalletData(_walletAddr);
+    // Delay wallet sync so it doesn't collide with the signal-computation burst
+    if (_walletAddr) setTimeout(() => fetchWalletData(_walletAddr), 5000);
   } catch(e) {
     const msg = e.message.includes('Failed to fetch')
       ? 'Network error. If you see a CORS issue in the console, open this file via a local server instead of file://.'
@@ -3146,7 +3155,8 @@ async function computeAllSignals() {
           '<span style="color:var(--ts)">○ ' + vals.filter(s=>s.signal==='NEUTRAL').length + ' NEUTRAL</span>';
       }
     } catch {}
-    await new Promise(r => setTimeout(r, 150));
+    // 300ms between each coin — keeps burst rate ≤ ~6 req/s (2 calls per coin)
+    await new Promise(r => setTimeout(r, 300));
   }
 }
 
