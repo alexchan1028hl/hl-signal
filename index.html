@@ -2,8 +2,17 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
 <title>HL-SIGNAL — Hyperliquid Screener</title>
+<!-- PWA -->
+<link rel="manifest" href="./manifest.json" />
+<meta name="theme-color" content="#00c896" />
+<meta name="description" content="Real-time Hyperliquid perpetuals dashboard — signal screener, trade journal, alerts & wallet sync." />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="apple-mobile-web-app-title" content="HL-SIGNAL" />
+<link rel="apple-touch-icon" href="./icons/apple-touch-icon.png" />
+<link rel="icon" type="image/png" sizes="32x32" href="./icons/favicon.png" />
 <script src="https://unpkg.com/lightweight-charts@4.1.3/dist/lightweight-charts.standalone.production.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
@@ -411,6 +420,132 @@ table.cpd tr.cpd-hit td{background:var(--gdim);color:var(--g);font-weight:700;bo
 .donate-divider span{font-size:.65rem;color:var(--td);text-transform:uppercase;letter-spacing:.1em}
 .donate-close-btn{width:100%;background:var(--card);border:1px solid var(--b);color:var(--ts);border-radius:7px;padding:9px;cursor:pointer;font-size:.78rem;font-family:var(--mono);transition:all .15s}
 .donate-close-btn:hover{border-color:var(--bhl);color:var(--tp)}
+
+/* === PWA INSTALL BUTTON === */
+.pwa-install-btn{background:linear-gradient(135deg,var(--g),#00a87a);border:none;color:#0d0f14;border-radius:6px;padding:6px 11px;cursor:pointer;font-size:.75rem;font-family:var(--mono);font-weight:700;display:flex;align-items:center;gap:5px;transition:all .2s;white-space:nowrap}
+.pwa-install-btn:hover{filter:brightness(1.1);transform:translateY(-1px)}
+
+/* ═══════════════════════════════════════════════════════
+   MOBILE RESPONSIVE
+   ═══════════════════════════════════════════════════════ */
+
+/* ── Tablet / large phone (≤ 768 px) ── */
+@media (max-width:768px){
+  /* App frame: let content flow naturally */
+  #app{grid-template-rows:auto auto auto 1fr;height:auto;min-height:100dvh}
+  body,#app{overflow-x:hidden;max-width:100vw}
+  #main{height:auto;width:100%;max-width:100%;min-width:0}
+  #topbar{flex-wrap:wrap;padding:8px 12px;gap:6px;min-height:unset;width:100%;max-width:100%;min-width:0;box-sizing:border-box}
+  #screenerPane{overflow-y:visible;padding:10px;width:100%;max-width:100%;min-width:0;box-sizing:border-box}
+  #screenerBody{overflow-x:hidden;max-width:100%;width:100%}
+
+  /* Topbar: two-row compact layout */
+  #topbar>div:first-child{flex:1 0 100%;display:flex;align-items:center;justify-content:space-between;gap:8px}
+  .controls{flex:1 0 100%;flex-wrap:wrap;gap:6px;justify-content:flex-start}
+  .logo-sub{display:none}
+  #portInput{width:72px}
+  .wallet-wrap{flex:1 1 0;min-width:0}
+  #walletInput{width:0;min-width:0;flex:1}
+  /* Refresh: icon only on mobile (no text) */
+  .refresh-btn{font-size:0;padding:6px 10px}
+  .refresh-btn::before{content:'↺';font-size:.9rem}
+  .countdown{display:none}
+
+  /* Deep pane → full-screen overlay on mobile */
+  #main.split{grid-template-columns:1fr}
+  #deepPane{
+    position:fixed!important;
+    inset:0;
+    z-index:500;
+    overflow-y:auto;
+    border-left:none;
+    padding-bottom:env(safe-area-inset-bottom)
+  }
+  /* Prevent scroll bleed on screener while deep pane is open */
+  #main.split #screenerPane{overflow:hidden;height:100dvh}
+
+  /* Screener table: hide # rank(1), Funding(5), OI(6), Vol(7) */
+  table.sc th:nth-child(1),table.sc td:nth-child(1),
+  table.sc th:nth-child(5),table.sc td:nth-child(5),
+  table.sc th:nth-child(6),table.sc td:nth-child(6),
+  table.sc th:nth-child(7),table.sc td:nth-child(7){display:none}
+  /* Table: fixed layout so it never overflows the container */
+  table.sc{table-layout:fixed;width:100%}
+  table.sc td,table.sc th{padding:7px 6px;overflow:hidden}
+  /* Column widths for mobile (visible cols: 2=Market, 3=Price, 4=24h%, 8=Signal) */
+  table.sc th:nth-child(3),table.sc td:nth-child(3){width:90px}
+  table.sc th:nth-child(4),table.sc td:nth-child(4){width:66px}
+  table.sc th:nth-child(8),table.sc td:nth-child(8){width:72px}
+  /* Signal badge: no score, compact, never overflows cell */
+  table.sc .badge span{display:none}
+  table.sc .badge{padding:2px 6px;letter-spacing:.02em;max-width:100%;overflow:hidden}
+
+  /* Stat grids: max 2–3 columns */
+  .stats-row{grid-template-columns:repeat(2,1fr)}
+  .j-stats{grid-template-columns:repeat(3,1fr)}
+  .an-grid{grid-template-columns:repeat(2,1fr)}
+  .tgt-kpi{grid-template-columns:repeat(2,1fr)}
+
+  /* Heatmap: 4 per row */
+  .hm-grid{grid-template-columns:repeat(4,1fr)}
+
+  /* Score bar labels: narrower */
+  .score-row{grid-template-columns:82px 1fr 42px}
+
+  /* Charts: slightly shorter to save vertical space */
+  #chartWrap{height:175px}
+
+  /* Modals: bottom-sheet style (slide up from bottom) */
+  .alert-modal,.donate-modal{
+    padding:8px 8px 0;
+    align-items:flex-end;
+    justify-content:center
+  }
+  .alert-panel{
+    width:100%;
+    max-height:90dvh;
+    border-radius:14px 14px 0 0
+  }
+  .donate-panel{
+    width:100%;
+    border-radius:14px 14px 0 0;
+    max-height:92dvh
+  }
+
+  /* Wallet bar: wrap KPIs */
+  .wbar-top{gap:10px}
+  .wbar-divider{display:none}
+
+  /* Tab labels: shorter */
+  #tabJournal{padding:5px 8px}
+  #tabTarget{padding:5px 8px}
+}
+
+/* ── Small phone (≤ 480 px) ── */
+@media (max-width:480px){
+  html{font-size:13px}
+  #topbar{padding:6px 10px}
+  .logo{font-size:.92rem}
+  .countdown{display:none}
+  #portInput{width:62px}
+
+  /* Score section: stack direction badge + number */
+  .score-display{flex-direction:column;align-items:flex-start;gap:8px}
+  .score-num{font-size:2rem}
+  .score-row{grid-template-columns:72px 1fr 36px}
+  .score-lbl{font-size:.67rem}
+
+  /* Journal stats: 2 per row on tiny screens */
+  .j-stats{grid-template-columns:repeat(2,1fr)}
+
+  /* Price: allow to compress slightly */
+  table.sc td:nth-child(3){font-size:.78rem}
+
+  /* Deep pane: tighter padding */
+  .dp-hdr{padding:10px 12px}
+  .dp-sec{padding:10px 12px}
+  .dp-sec-title{margin-bottom:7px}
+}
 </style>
 </head>
 <body>
@@ -443,6 +578,7 @@ table.cpd tr.cpd-hit td{background:var(--gdim);color:var(--g);font-weight:700;bo
         <span style="color:var(--b)">·</span>
         <span>Next <strong id="cdNum">30</strong>s</span>
       </div>
+      <button id="pwaInstallBtn" class="pwa-install-btn" style="display:none" onclick="installPWA()" title="Install HL-SIGNAL to your device">📲 Install</button>
       <button class="donate-btn" onclick="toggleDonate()" title="Support this project ☕">
         ☕ Support
       </button>
@@ -3020,6 +3156,9 @@ async function selectTicker(coin) {
   document.querySelectorAll('table.sc tr[data-coin]').forEach(tr =>
     tr.classList.toggle('active', tr.dataset.coin === coin));
 
+  // Push history state on mobile so back-button closes the deep pane
+  if (window.innerWidth <= 768) history.pushState({ hlDeep: coin }, '');
+
   const pane = document.getElementById('deepPane');
   const mainEl = document.getElementById('main');
   pane.style.display = '';
@@ -3117,6 +3256,43 @@ setInterval(function() {
 }, 1000);
 
 loadMarkets();
+
+/* ── PWA: Service Worker ─────────────────────────────── */
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('./sw.js')
+      .then(r => console.log('[SW] registered, scope:', r.scope))
+      .catch(e => console.warn('[SW] registration failed:', e));
+  });
+}
+
+/* ── PWA: Install prompt (Android / Chrome) ──────────── */
+let _pwaPrompt = null;
+window.addEventListener('beforeinstallprompt', e => {
+  e.preventDefault();
+  _pwaPrompt = e;
+  const btn = document.getElementById('pwaInstallBtn');
+  if (btn) btn.style.display = '';
+});
+window.addEventListener('appinstalled', () => {
+  _pwaPrompt = null;
+  const btn = document.getElementById('pwaInstallBtn');
+  if (btn) btn.style.display = 'none';
+});
+function installPWA() {
+  if (!_pwaPrompt) return;
+  _pwaPrompt.prompt();
+  _pwaPrompt.userChoice.then(() => {
+    _pwaPrompt = null;
+    const btn = document.getElementById('pwaInstallBtn');
+    if (btn) btn.style.display = 'none';
+  });
+}
+
+/* ── Mobile: Android back-button closes deep pane ───── */
+window.addEventListener('popstate', () => {
+  if (S.selectedCoin) closeDeep();
+});
 </script>
 </body>
 </html>
