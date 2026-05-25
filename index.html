@@ -3935,9 +3935,23 @@ loadMarkets();
 
 /* ── PWA: Service Worker ─────────────────────────────── */
 if ('serviceWorker' in navigator) {
+  // Guard against reload loops — only reload once per SW update
+  let _swRefreshing = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (_swRefreshing) return;
+    _swRefreshing = true;
+    console.log('[SW] New version activated — reloading for latest build…');
+    window.location.reload();
+  });
+
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('./sw.js')
-      .then(r => console.log('[SW] registered, scope:', r.scope))
+      .then(r => {
+        console.log('[SW] registered, scope:', r.scope);
+        // Check for updates immediately and then every 60s
+        r.update();
+        setInterval(() => r.update(), 60000);
+      })
       .catch(e => console.warn('[SW] registration failed:', e));
   });
 }
