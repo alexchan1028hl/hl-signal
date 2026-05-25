@@ -893,7 +893,7 @@ async function fetchTopMarkets(n) {
       coin: a.name, maxLeverage: a.maxLeverage,
       markPx, prevDayPx,
       funding:      +c.funding || 0,
-      openInterest: +c.openInterest || 0,
+      openInterest: (+c.openInterest || 0) * markPx,   // API returns coins; convert to USD
       volume24h:    +c.dayNtlVlm || 0,
       change24h:    prevDayPx > 0 ? (markPx - prevDayPx) / prevDayPx * 100 : 0
     };
