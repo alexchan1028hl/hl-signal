@@ -1189,7 +1189,8 @@ function renderScreener() {
   document.getElementById('screenerBody').innerHTML =
     '<table class="sc"><thead><tr>' +
     '<th>#</th><th>Market</th><th>Price</th><th>24h %</th>' +
-    '<th>Funding/hr</th><th>Open Int.</th><th>Vol 24h</th><th>Signal</th><th>MTF</th>' +
+    '<th>Funding/hr</th><th>Open Int.</th><th>Vol 24h</th><th>Signal</th>' +
+    '<th class="th-tip tip-right" data-tip="Multi-Timeframe: three dots show the signal direction (🟢 Long · 🔴 Short · ⚫ Neutral) across 15-minute, 1-hour and 4-hour candles. When all three align in the same colour the trend has the strongest confirmation.">MTF <i class="tip-icon">ⓘ</i></th>' +
     '</tr></thead><tbody>' + rows + '</tbody></table>';
 
   // Row click → open deep dive (but not when clicking the star)
