@@ -1975,12 +1975,12 @@ function renderCarry() {
 
   body.innerHTML = `<div class="carry-wrap">
     <div class="carry-intro">
-      💰 <strong>資金費率套利雷達</strong> — 正費率時做空永續合約收取費用；負費率時做多。
-      年化 &gt;100% = 強力機會，&gt;50% = 值得關注。回本天數 = 手續費多久能從費率中回收。
+      💰 <strong>Funding Carry Scanner</strong> — Short perps when funding is positive to collect fees; go long when negative.
+      APR &gt;100% = strong opportunity, &gt;50% = worth watching. Breakeven days = how long until fees recover round-trip cost.
     </div>
     <table class="carry-table">
       <thead><tr>
-        <th>幣種</th><th>方向</th><th>年化 APR</th><th>回本天數</th><th>評級</th><th>強度</th>
+        <th>Coin</th><th>Direction</th><th>Annual APR</th><th>Breakeven</th><th>Rating</th><th>Strength</th>
       </tr></thead>
       <tbody>${tableRows}</tbody>
     </table>
