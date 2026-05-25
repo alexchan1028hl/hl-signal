@@ -1991,10 +1991,14 @@ function renderCarry() {
     </tr>`;
   }).join('');
 
+  const carryAge = Math.round((Date.now() - (S._carryTs || 0)) / 1000);
+  S._carryTs = Date.now();
+  const carryAgeStr = carryAge < 5 ? '' : ` · <span style="color:var(--td);font-size:.67rem">updated ${carryAge < 60 ? carryAge + 's' : Math.round(carryAge/60) + 'm'} ago</span>`;
+
   body.innerHTML = `<div class="carry-wrap">
     <div class="carry-intro">
       💰 <strong>Funding Carry Scanner</strong> — Short perps when funding is positive to collect fees; go long when negative.
-      APR &gt;100% = strong opportunity, &gt;50% = worth watching. Breakeven days = how long until fees recover round-trip cost.
+      APR &gt;100% = strong opportunity, &gt;50% = worth watching. Breakeven days = how long until fees recover round-trip cost.${carryAgeStr}
     </div>
     <table class="carry-table">
       <thead><tr>
@@ -2012,13 +2016,14 @@ function renderCarry() {
 
 async function renderWhales() {
   const body = document.getElementById('screenerBody');
+  // Serve from cache silently (no spinner flash) if data is still fresh
+  if (_whaleCache.data && Date.now() - _whaleCache.ts < WHALE_TTL) {
+    _renderWhaleTable(_whaleCache.data);
+    return;
+  }
+  // Only show spinner when actually going out to fetch new data
   body.innerHTML = '<div class="state-banner"><div class="spinner"></div><span>Scanning top trader positions…</span></div>';
   try {
-    // Serve from cache if fresh
-    if (_whaleCache.data && Date.now() - _whaleCache.ts < WHALE_TTL) {
-      _renderWhaleTable(_whaleCache.data);
-      return;
-    }
     // 1. Fetch top 20 traders by 30-day PnL from stats endpoint
     const lbRes = await fetch('https://stats-data.hyperliquid.xyz/Mainnet/leaderboard?timeWindow=month');
     if (!lbRes.ok) throw new Error('Leaderboard unavailable (' + lbRes.status + ')');
@@ -3906,6 +3911,25 @@ setInterval(function() {
   document.getElementById('cdNum').textContent = S.countdown;
   if (S.countdown <= 0) { S.countdown = 30; loadMarkets(); }
 }, 1000);
+
+// ── Dedicated auto-refresh for new feature tabs ───────────────────────────
+// Carry: re-render every 30s directly from S.markets (no extra API calls)
+setInterval(function() {
+  if (S.activeTab === 'carry') renderCarry();
+}, 30000);
+
+// DNA: re-render every 30s from local journal data (zero API calls)
+setInterval(function() {
+  if (S.activeTab === 'dna') renderDna();
+}, 30000);
+
+// Smart$: auto-expire cache every 5 min and re-fetch when tab is active;
+// when tab is not active, silently expire so the next click gets fresh data.
+setInterval(function() {
+  _whaleCache.ts = 0; // mark stale
+  if (S.activeTab === 'whales') renderWhales(); // re-fetch immediately if visible
+}, WHALE_TTL);
+// ─────────────────────────────────────────────────────────────────────────
 
 loadMarkets();
 
