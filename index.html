@@ -455,6 +455,22 @@ table.cpd tr.cpd-hit td{background:var(--gdim);color:var(--g);font-weight:700;bo
   .carry-table th:nth-child(5),.carry-table td:nth-child(5){display:none}
 }
 
+/* === SMART MONEY (WHALE) PANEL === */
+.whale-hdr{padding:10px 16px;background:var(--b1);border-bottom:1px solid var(--bd);display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px}
+.whale-hdr-info{color:var(--ts);font-size:.75rem}
+.whale-hdr-info strong{color:var(--t)}
+.whale-refresh-btn{font-size:.72rem;padding:3px 10px;background:var(--b2);border:1px solid var(--bd);border-radius:4px;color:var(--t);cursor:pointer}
+.whale-refresh-btn:hover{background:var(--hover)}
+.whale-footer{padding:8px 16px;color:var(--ts);font-size:.68rem;border-top:1px solid var(--bd)}
+.whale-table{width:100%;border-collapse:collapse}
+.whale-table th{font-size:.65rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--td);padding:6px 10px;border-bottom:1px solid var(--b);text-align:left;white-space:nowrap}
+.whale-table td{padding:9px 10px;border-bottom:1px solid var(--b);font-size:.8rem;vertical-align:middle}
+.whale-table tr:hover td{background:var(--hover)}
+@media(max-width:768px){
+  .whale-table th:nth-child(3),.whale-table td:nth-child(3),
+  .whale-table th:nth-child(4),.whale-table td:nth-child(4){display:none}
+}
+
 /* === MULTI-TIMEFRAME DOTS === */
 .mtf-wrap{display:flex;flex-direction:column;align-items:center;gap:3px}
 .mtf-lbls{display:flex;gap:5px}
@@ -812,6 +828,10 @@ async function hlPost(body, _retry = 0) {
 /* 4H candle cache — 4H candles change every 4 hours, not every 30s.
    Caching them eliminates ~25% of bulk API calls after the first cycle. */
 const _c4h    = {};
+
+/* Smart Money (whale) cache — refreshed every 5 min on demand */
+const _whaleCache = { ts: 0, data: null };
+const WHALE_TTL   = 5 * 60 * 1000;
 const C4H_TTL = 4 * 3600 * 1000;
 async function fetchCandles4H(coin) {
   const c = _c4h[coin];
@@ -1943,9 +1963,140 @@ function renderCarry() {
   </div>`;
 }
 
-function renderWhales() {
-  document.getElementById('screenerBody').innerHTML =
-    '<div class="state-banner"><div class="spinner"></div><span>載入中…</span></div>';
+async function renderWhales() {
+  const body = document.getElementById('screenerBody');
+  body.innerHTML = '<div class="state-banner"><div class="spinner"></div><span>Scanning top trader positions…</span></div>';
+  try {
+    // Serve from cache if fresh
+    if (_whaleCache.data && Date.now() - _whaleCache.ts < WHALE_TTL) {
+      _renderWhaleTable(_whaleCache.data);
+      return;
+    }
+    // 1. Fetch top 20 traders by 30-day PnL from stats endpoint
+    const lbRes = await fetch('https://stats-data.hyperliquid.xyz/Mainnet/leaderboard?timeWindow=month');
+    if (!lbRes.ok) throw new Error('Leaderboard unavailable (' + lbRes.status + ')');
+    const lb = await lbRes.json();
+    const topTraders = (lb.leaderboardRows || [])
+      .map(row => {
+        const mp = row.windowPerformances?.find(([tw]) => tw === 'month')?.[1];
+        return { ethAddress: row.ethAddress, monthPnl: parseFloat(mp?.pnl || 0) };
+      })
+      .sort((a, b) => b.monthPnl - a.monthPnl)
+      .slice(0, 30);
+    if (!topTraders.length) throw new Error('No leaderboard data available');
+
+    // 2. Fetch positions in parallel batches of 5 (bypasses shared rlAcquire queue)
+    const posMap = {};
+    let fetched = 0;
+    const BATCH = 5;
+    for (let i = 0; i < topTraders.length; i += BATCH) {
+      const batch = topTraders.slice(i, i + BATCH);
+      await Promise.all(batch.map(async trader => {
+        try {
+          const r = await fetch(HL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ type: 'clearinghouseState', user: trader.ethAddress })
+          });
+          if (!r.ok) return;
+          const state = await r.json();
+          const positions = (state.assetPositions || []).map(ap => ap.position || ap);
+          positions.forEach(p => {
+            const coin = p.coin;
+            const sz   = parseFloat(p.szi || 0);
+            if (!coin || sz === 0) return;
+            if (!posMap[coin]) posMap[coin] = { long: 0, short: 0 };
+            if (sz > 0) posMap[coin].long++; else posMap[coin].short++;
+          });
+          fetched++;
+        } catch(_) { /* skip individual errors */ }
+      }));
+      if (i + BATCH < topTraders.length) await new Promise(r => setTimeout(r, 150));
+    }
+
+    // 3. Build convergence table (only coins with ≥2 top-trader holders)
+    const rows = Object.entries(posMap)
+      .map(([coin, d]) => {
+        const total     = d.long + d.short;
+        const bullish   = d.long >= d.short;
+        const dominant  = bullish ? d.long : d.short;
+        const consensus = total > 0 ? dominant / total * 100 : 0;
+        return { coin, long: d.long, short: d.short, total, consensus, bullish };
+      })
+      .filter(r => r.total >= 1)
+      .sort((a, b) => b.total !== a.total ? b.total - a.total : b.consensus - a.consensus);
+
+    const result = { rows, topCount: fetched, ts: Date.now() };
+    _whaleCache.data = result;
+    _whaleCache.ts   = Date.now();
+    _renderWhaleTable(result);
+  } catch(e) {
+    body.innerHTML = `<div class="state-banner">❌ ${e.message}</div>`;
+  }
+}
+
+function _renderWhaleTable({ rows, topCount, ts }) {
+  const body   = document.getElementById('screenerBody');
+  const ageSec = Math.round((Date.now() - ts) / 1000);
+  const ageStr = ageSec < 60 ? ageSec + 's ago' : Math.round(ageSec / 60) + 'm ago';
+
+  if (!rows.length) {
+    body.innerHTML = '<div class="state-banner">No convergence found — top traders hold few coins in common.</div>';
+    return;
+  }
+
+  const sigBadge = (consensus, bullish) => {
+    if (consensus >= 90) return bullish
+      ? '<span class="carry-score extreme">🔥 Max Bull</span>'
+      : '<span class="carry-score extreme" style="background:rgba(255,71,87,.2);color:var(--r)">🔥 Max Bear</span>';
+    if (consensus >= 70) return bullish
+      ? '<span class="carry-score strong">🟢 Strong Buy</span>'
+      : '<span class="carry-score strong" style="background:rgba(255,71,87,.12);color:var(--r)">🔴 Strong Sell</span>';
+    if (consensus >= 55) return bullish
+      ? '<span class="carry-score moderate" style="background:rgba(0,200,150,.1);color:var(--g)">↗ Bullish</span>'
+      : '<span class="carry-score moderate" style="background:rgba(255,71,87,.1);color:var(--r)">↘ Bearish</span>';
+    return '<span class="carry-score weak">〰 Split</span>';
+  };
+
+  const tableRows = rows.map(r => {
+    const lPct = r.total > 0 ? Math.round(r.long / r.total * 100) : 0;
+    const sPct = 100 - lPct;
+    const dirCol = r.bullish ? 'var(--g)' : 'var(--r)';
+    const dirArrow = r.bullish ? '▲' : '▼';
+    return `<tr>
+      <td>
+        <span style="font-family:var(--mono);font-weight:700">${r.coin}</span>
+        <span style="color:${dirCol};font-size:.7rem;margin-left:5px">${dirArrow}</span>
+      </td>
+      <td style="font-family:var(--mono);font-weight:700;color:${dirCol}">${r.total}</td>
+      <td>
+        <div style="display:flex;align-items:center;gap:5px">
+          <span style="color:var(--g);font-size:.7rem;width:26px;text-align:right">${lPct}%</span>
+          <div style="width:70px;height:6px;border-radius:3px;overflow:hidden;display:flex;flex-shrink:0">
+            <div style="width:${lPct}%;background:var(--g)"></div>
+            <div style="width:${sPct}%;background:var(--r)"></div>
+          </div>
+          <span style="color:var(--r);font-size:.7rem;width:26px">${sPct}%</span>
+        </div>
+      </td>
+      <td>${sigBadge(r.consensus, r.bullish)}</td>
+    </tr>`;
+  }).join('');
+
+  body.innerHTML = `
+  <div class="whale-hdr">
+    <span class="whale-hdr-info">Tracking <strong>${topCount}</strong> top traders &nbsp;·&nbsp; ${ageStr}</span>
+    <button class="whale-refresh-btn" onclick="_whaleCache.ts=0;renderWhales()">↻ Refresh</button>
+  </div>
+  <div style="overflow-x:auto">
+    <table class="whale-table">
+      <thead><tr>
+        <th>Coin</th><th>Holders</th><th>Long / Short</th><th>Signal</th>
+      </tr></thead>
+      <tbody>${tableRows}</tbody>
+    </table>
+  </div>
+  <div class="whale-footer">* Aggregated open positions from top ${topCount} Hyperliquid traders (ranked by 30d PnL). Cached 5 min. Not financial advice.</div>`;
 }
 function renderDna() {
   document.getElementById('screenerBody').innerHTML =
