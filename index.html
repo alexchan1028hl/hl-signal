@@ -358,6 +358,11 @@ table.cpd tr.cpd-hit td{background:var(--gdim);color:var(--g);font-weight:700;bo
 /* === WEBSOCKET DOT === */
 #wsDot{transition:background .5s,box-shadow .5s}
 .ws-live{background:var(--g)!important;box-shadow:0 0 6px var(--g)}
+/* Real-time price tick flash */
+@keyframes tick-up  {0%{background:rgba(0,200,150,.28);color:#fff}100%{background:transparent}}
+@keyframes tick-down{0%{background:rgba(255,71,87,.28);color:#fff} 100%{background:transparent}}
+.tick-up  {animation:tick-up   .7s ease-out forwards;border-radius:3px}
+.tick-down{animation:tick-down .7s ease-out forwards;border-radius:3px}
 .ws-poll{background:var(--y)!important}
 .ws-dead{background:var(--r)!important}
 
@@ -421,6 +426,13 @@ table.cpd tr.cpd-hit td{background:var(--gdim);color:var(--g);font-weight:700;bo
 .donate-close-btn{width:100%;background:var(--card);border:1px solid var(--b);color:var(--ts);border-radius:7px;padding:9px;cursor:pointer;font-size:.78rem;font-family:var(--mono);transition:all .15s}
 .donate-close-btn:hover{border-color:var(--bhl);color:var(--tp)}
 
+/* === MULTI-TIMEFRAME DOTS === */
+.mtf-wrap{display:flex;flex-direction:column;align-items:center;gap:3px}
+.mtf-lbls{display:flex;gap:5px}
+.mtf-lbl{font-size:.55rem;color:var(--td);letter-spacing:.03em;width:12px;text-align:center}
+.mtf-dots{display:flex;gap:5px;align-items:center}
+.mtf-dot{display:inline-block;width:8px;height:8px;border-radius:50%;flex-shrink:0}
+
 /* === PWA INSTALL BUTTON === */
 .pwa-install-btn{background:linear-gradient(135deg,var(--g),#00a87a);border:none;color:#0d0f14;border-radius:6px;padding:6px 11px;cursor:pointer;font-size:.75rem;font-family:var(--mono);font-weight:700;display:flex;align-items:center;gap:5px;transition:all .2s;white-space:nowrap}
 .pwa-install-btn:hover{filter:brightness(1.1);transform:translateY(-1px)}
@@ -478,11 +490,12 @@ table.cpd tr.cpd-hit td{background:var(--gdim);color:var(--g);font-weight:700;bo
   /* Prevent scroll bleed on screener while deep pane is open */
   #main.split #screenerPane{overflow:hidden;height:100dvh}
 
-  /* Screener table: hide # rank(1), Funding(5), OI(6), Vol(7) */
+  /* Screener table: hide # rank(1), Funding(5), OI(6), Vol(7), MTF(9) */
   table.sc th:nth-child(1),table.sc td:nth-child(1),
   table.sc th:nth-child(5),table.sc td:nth-child(5),
   table.sc th:nth-child(6),table.sc td:nth-child(6),
-  table.sc th:nth-child(7),table.sc td:nth-child(7){display:none}
+  table.sc th:nth-child(7),table.sc td:nth-child(7),
+  table.sc th:nth-child(9),table.sc td:nth-child(9){display:none}
   /* Table: fixed layout so it never overflows the container */
   table.sc{table-layout:fixed;width:100%}
   table.sc td,table.sc th{padding:7px 6px;overflow:hidden}
@@ -626,9 +639,10 @@ table.cpd tr.cpd-hit td{background:var(--gdim);color:var(--g);font-weight:700;bo
         <div class="alert-form-title">New Alert</div>
         <div class="alert-grid">
           <select class="alert-sel" id="aFormCoin"><option value="">— Select coin —</option></select>
-          <select class="alert-sel" id="aFormType">
+          <select class="alert-sel" id="aFormType" onchange="onAlertTypeChange()">
             <option value="price">Price</option>
             <option value="signal">Signal score</option>
+            <option value="signal-flip">Signal flips to ⚡</option>
             <option value="funding">Funding %/hr</option>
           </select>
         </div>
@@ -963,6 +977,19 @@ const f2 = (n, d) => (n == null || isNaN(n)) ? '—' : n.toLocaleString('en-US',
 const fPx = n => !n ? '—' : n > 1000 ? '$' + f2(n, 0) : n > 1 ? '$' + f2(n, 2) : '$' + f2(n, 5);
 const fBig = n => n >= 1e9 ? '$' + (n/1e9).toFixed(2) + 'B' : n >= 1e6 ? '$' + (n/1e6).toFixed(1) + 'M' : '$' + (n/1e3).toFixed(0) + 'K';
 
+function mkMtfDots(mtf) {
+  if (!mtf) return '<span style="color:var(--td);font-size:.7rem;letter-spacing:.1em">···</span>';
+  const col = s => s === 'LONG' ? 'var(--g)' : s === 'SHORT' ? 'var(--r)' : 'var(--b2,#3a4458)';
+  const tip = '15m: ' + mtf.tf15m + '  1H: ' + mtf.tf1h + '  4H: ' + mtf.tf4h;
+  return '<div class="mtf-wrap" title="' + tip + '">' +
+    '<div class="mtf-lbls"><span class="mtf-lbl">15m</span><span class="mtf-lbl">1H</span><span class="mtf-lbl">4H</span></div>' +
+    '<div class="mtf-dots">' +
+      '<span class="mtf-dot" style="background:' + col(mtf.tf15m) + '"></span>' +
+      '<span class="mtf-dot" style="background:' + col(mtf.tf1h)  + '"></span>' +
+      '<span class="mtf-dot" style="background:' + col(mtf.tf4h)  + '"></span>' +
+    '</div></div>';
+}
+
 function mkBadge(signal, score) {
   const dot = signal === 'NEUTRAL' ? '○' : '●';
   const sc = score != null ? '<span style="opacity:.7;margin-left:4px">' + (score > 0 ? '+' : '') + score + '</span>' : '';
@@ -1029,13 +1056,14 @@ function renderScreener() {
       '<td>' + fBig(m.openInterest) + '</td>' +
       '<td style="color:var(--ts)">' + fBig(m.volume24h) + '</td>' +
       '<td>' + (sig ? mkBadge(sig.signal, sig.score) : '<span style="color:var(--td);font-size:.75rem">…</span>') + '</td>' +
+      '<td style="text-align:center">' + mkMtfDots(S.mtf[m.coin]) + '</td>' +
       '</tr>';
   }).join('');
 
   document.getElementById('screenerBody').innerHTML =
     '<table class="sc"><thead><tr>' +
     '<th>#</th><th>Market</th><th>Price</th><th>24h %</th>' +
-    '<th>Funding/hr</th><th>Open Int.</th><th>Vol 24h</th><th>Signal</th>' +
+    '<th>Funding/hr</th><th>Open Int.</th><th>Vol 24h</th><th>Signal</th><th>MTF</th>' +
     '</tr></thead><tbody>' + rows + '</tbody></table>';
 
   // Row click → open deep dive (but not when clicking the star)
@@ -2592,6 +2620,17 @@ const AL = {
   }
 };
 
+// Called from computeAllSignals when a coin's signal state changes
+function checkSigFlipAlerts(coin, from, to) {
+  let fired = false;
+  AL.list.forEach(a => {
+    if (!a.active || a.type !== 'signal-flip' || a.coin !== coin) return;
+    const met = a.condition === 'any' || a.condition === 'to' + to;
+    if (met) { fireAlert(a); a.active = false; a.firedAt = Date.now(); fired = true; }
+  });
+  if (fired) { AL.save(); renderAlertList(); updateAlertBadge(); }
+}
+
 let _lastWsState = 'poll'; // track so we can restore after alert flash
 
 function fireAlert(a) {
@@ -2599,12 +2638,19 @@ function fireAlert(a) {
   const valStr  = a.type === 'price'   ? '$' + a.value.toLocaleString() :
                   a.type === 'signal'  ? 'score ' + a.value :
                                          a.value + '%/hr';
-  const msg = a.type === 'price'   ? 'Price ' + condStr + ' ' + valStr :
-              a.type === 'signal'  ? 'Signal score ' + condStr + ' ' + valStr :
-                                     'Funding ' + condStr + ' ' + valStr;
+  const flipTarget = a.condition === 'toLONG' ? 'LONG' : a.condition === 'toSHORT' ? 'SHORT' :
+                     a.condition === 'toNEUTRAL' ? 'NEUTRAL' : 'any direction';
+  const msg = a.type === 'price'        ? 'Price ' + condStr + ' ' + valStr :
+              a.type === 'signal'       ? 'Signal score ' + condStr + ' ' + valStr :
+              a.type === 'signal-flip'  ? 'Signal flipped → ' + flipTarget :
+                                          'Funding ' + condStr + ' ' + valStr;
+  const icon  = a.type === 'signal-flip' && a.condition === 'toLONG'  ? '🟢' :
+                a.type === 'signal-flip' && a.condition === 'toSHORT' ? '🔴' : '🔔';
+  const color = a.type === 'signal-flip' && a.condition === 'toLONG'  ? 'var(--g)' :
+                a.type === 'signal-flip' && a.condition === 'toSHORT' ? 'var(--r)' : 'var(--g)';
 
   // 1. In-page toast (always shown — works on file://, works when permission denied)
-  showAlertToast(a.coin + ' Alert Triggered', msg, { icon: '🔔', color: 'var(--g)' });
+  showAlertToast(a.coin + ' Alert Triggered', msg, { icon, color });
 
   // 2. Browser notification (works when tab is in background, if permission granted)
   if ('Notification' in window && Notification.permission === 'granted') {
@@ -2750,12 +2796,32 @@ function populateAlertCoinSelect() {
   if (!cur && S?.selectedCoin) sel.value = S.selectedCoin;
 }
 
+function onAlertTypeChange() {
+  const type = document.getElementById('aFormType')?.value;
+  const condSel = document.getElementById('aFormCond');
+  const valInp  = document.getElementById('aFormVal');
+  if (type === 'signal-flip') {
+    condSel.innerHTML =
+      '<option value="toLONG">Flips to LONG 🟢</option>' +
+      '<option value="toSHORT">Flips to SHORT 🔴</option>' +
+      '<option value="toNEUTRAL">Flips to NEUTRAL ⚪</option>' +
+      '<option value="any">Any flip ⚡</option>';
+    valInp.style.display = 'none';
+    valInp.value = '0';
+  } else {
+    condSel.innerHTML =
+      '<option value="above">Crosses above ↑</option>' +
+      '<option value="below">Crosses below ↓</option>';
+    valInp.style.display = '';
+  }
+}
+
 function addAlert() {
   const coin = document.getElementById('aFormCoin')?.value;
   const type = document.getElementById('aFormType')?.value;
   const cond = document.getElementById('aFormCond')?.value;
-  const val  = parseFloat(document.getElementById('aFormVal')?.value);
-  if (!coin || !type || !cond || isNaN(val)) {
+  const val  = type === 'signal-flip' ? 0 : parseFloat(document.getElementById('aFormVal')?.value);
+  if (!coin || !type || !cond || (type !== 'signal-flip' && isNaN(val))) {
     alert('Please fill in all fields.'); return;
   }
   if (Notification.permission === 'default') {
@@ -2789,13 +2855,20 @@ function renderAlertList() {
   // Show active first, then fired
   const sorted = [...AL.list].sort((a, b) => (+b.active) - (+a.active));
   el.innerHTML = sorted.map(a => {
-    const typeLabel = a.type === 'price' ? 'Price' : a.type === 'signal' ? 'Signal' : 'Funding';
-    const condLabel = a.condition === 'above' ? '≥' : '≤';
-    const valLabel  = a.type === 'price' ? '$' + a.value : a.value + (a.type === 'funding' ? '%/hr' : '');
-    const firedStr  = a.firedAt ? 'Fired ' + new Date(a.firedAt).toLocaleTimeString() : '';
+    const firedStr = a.firedAt ? 'Fired ' + new Date(a.firedAt).toLocaleTimeString() : '';
+    let desc;
+    if (a.type === 'signal-flip') {
+      const target = a.condition === 'toLONG' ? '→ LONG 🟢' : a.condition === 'toSHORT' ? '→ SHORT 🔴' :
+                     a.condition === 'toNEUTRAL' ? '→ NEUTRAL ⚪' : 'Any flip ⚡';
+      desc = 'Signal flips ' + target;
+    } else {
+      const condLabel = a.condition === 'above' ? '≥' : '≤';
+      const valLabel  = a.type === 'price' ? '$' + a.value.toLocaleString() : a.value + (a.type === 'funding' ? '%/hr' : '');
+      desc = (a.type === 'price' ? 'Price' : a.type === 'signal' ? 'Score' : 'Funding') + ' ' + condLabel + ' ' + valLabel;
+    }
     return '<div class="alert-item" style="opacity:' + (a.active ? 1 : 0.5) + '">' +
       '<div class="alert-item-l">' +
-        '<div class="alert-item-coin">' + a.coin + '<span style="font-size:.68rem;font-weight:400;color:var(--ts);margin-left:6px">' + typeLabel + ' ' + condLabel + ' ' + valLabel + '</span></div>' +
+        '<div class="alert-item-coin">' + a.coin + '<span style="font-size:.68rem;font-weight:400;color:var(--ts);margin-left:6px">' + desc + '</span></div>' +
         (firedStr ? '<div class="alert-item-fired">✓ ' + firedStr + '</div>' :
           '<div class="alert-item-desc">' + (a.active ? '⏳ Watching…' : 'Inactive') + '</div>') +
       '</div>' +
@@ -2810,6 +2883,8 @@ function renderAlertList() {
    so the full render loop only runs every 30s for market/funding/OI data.
    ══════════════════════════════════════════════════════════════════════════ */
 let _ws = null, _wsTimer = null;
+// Signal-change tracking — populated on first computeAllSignals run, diffed on every subsequent run
+const _prevSignals = {};
 
 function wsConnect() {
   if (_ws && (_ws.readyState === WebSocket.OPEN || _ws.readyState === WebSocket.CONNECTING)) return;
@@ -2843,14 +2918,38 @@ function wsHandleMids(mids) {
     if (raw === undefined) return;
     const px = +raw;
     if (px === m.markPx) return;
+    const dir = px > m.markPx ? 'up' : 'down';
     m.markPx = px;
-    // Patch screener price cell
+    // Keep 24h% in sync with the live price
+    if (m.prevDayPx > 0) m.change24h = (px - m.prevDayPx) / m.prevDayPx * 100;
+
+    // Patch screener row in-place
     const row = document.querySelector('tr[data-coin="' + m.coin + '"]');
-    if (row) { const cells = row.querySelectorAll('td'); if (cells[2]) cells[2].textContent = fPx(px); }
+    if (row) {
+      const cells = row.querySelectorAll('td');
+      // Price cell — flash green/red on direction change
+      if (cells[2]) {
+        cells[2].textContent = fPx(px);
+        cells[2].classList.remove('tick-up', 'tick-down');
+        void cells[2].offsetWidth; // force reflow so animation restarts
+        cells[2].classList.add('tick-' + dir);
+      }
+      // 24h% cell — live colour + value
+      if (cells[3]) {
+        const chg = m.change24h;
+        cells[3].style.color = chg >= 0 ? 'var(--g)' : 'var(--r)';
+        cells[3].textContent = (chg >= 0 ? '+' : '') + chg.toFixed(2) + '%';
+      }
+    }
     // Patch deep-dive live price if that coin is open
     if (S?.selectedCoin === m.coin) {
       const dpPx = document.getElementById('dpLivePx');
-      if (dpPx) dpPx.textContent = fPx(px);
+      if (dpPx) {
+        dpPx.textContent = fPx(px);
+        dpPx.classList.remove('tick-up', 'tick-down');
+        void dpPx.offsetWidth;
+        dpPx.classList.add('tick-' + dir);
+      }
     }
   });
   // Check alerts on every WS tick
@@ -3119,7 +3218,7 @@ async function fetchWalletData(addr) {
 
 /* ── APP STATE ────────────────────────────────────────────────────────────── */
 const S = {
-  markets: [], signals: {}, cache: {}, newsCache: {},
+  markets: [], signals: {}, mtf: {}, cache: {}, newsCache: {},
   selectedCoin: null, portfolioUSD: 1300, countdown: 30,
   activeTab: 'all',
   watchlist: new Set(lsGet('hl_watchlist', [])),
@@ -3151,15 +3250,45 @@ async function loadMarkets() {
 async function computeAllSignals() {
   for (const market of S.markets) {
     try {
-      const [candles, ob] = await Promise.all([fetchCandles(market.coin, '1h', 60), fetchOrderBook(market.coin)]);
+      // Fetch all 3 timeframes + order book in one parallel batch
+      const [c15m, candles, c4h, ob] = await Promise.all([
+        fetchCandles(market.coin, '15m', 60),
+        fetchCandles(market.coin, '1h',  60),
+        fetchCandles(market.coin, '4h',  60),
+        fetchOrderBook(market.coin)
+      ]);
       if (candles.length >= 14) {
         const sig = computeSignal(candles, market, ob);
+        const prev = _prevSignals[market.coin];
         S.signals[market.coin] = sig;
-        // Patch just the signal cell — avoids full table re-render
+
+        // ── Signal-flip detection ───────────────────────────────────────────
+        if (prev !== undefined && prev !== sig.signal) {
+          // 1. Passive auto-toast (fires for everyone, no alert setup needed)
+          const flipIcon  = sig.signal === 'LONG' ? '🟢' : sig.signal === 'SHORT' ? '🔴' : '⚪';
+          const flipColor = sig.signal === 'LONG' ? 'var(--g)' : sig.signal === 'SHORT' ? 'var(--r)' : 'var(--ts)';
+          showAlertToast(market.coin + '  ' + prev + ' → ' + sig.signal,
+            'Signal flipped', { icon: flipIcon, color: flipColor, ttl: 12000 });
+          // 2. Fire any manual signal-flip alerts watching this coin
+          checkSigFlipAlerts(market.coin, prev, sig.signal);
+        }
+        _prevSignals[market.coin] = sig.signal;
+        // ───────────────────────────────────────────────────────────────────
+
+        // Compute MTF signals for 15m and 4H (1H already computed above as `sig`)
+        const mtf = {
+          tf15m: c15m.length >= 14 ? computeSignal(c15m, market, ob).signal : 'NEUTRAL',
+          tf1h:  sig.signal,
+          tf4h:  c4h.length  >= 14 ? computeSignal(c4h,  market, ob).signal : 'NEUTRAL'
+        };
+        S.mtf[market.coin] = mtf;
+
+        // Patch signal + MTF cells in-place — avoids full table re-render
         const row = document.querySelector('tr[data-coin="' + market.coin + '"]');
         if (row) {
           const cells = row.querySelectorAll('td');
           if (cells[7]) cells[7].innerHTML = mkBadge(sig.signal, sig.score);
+          if (cells[8]) { cells[8].style.textAlign = 'center'; cells[8].innerHTML = mkMtfDots(mtf); }
         }
         // Update summary counts
         const vals = Object.values(S.signals);
@@ -3169,8 +3298,8 @@ async function computeAllSignals() {
           '<span style="color:var(--ts)">○ ' + vals.filter(s=>s.signal==='NEUTRAL').length + ' NEUTRAL</span>';
       }
     } catch {}
-    // 300ms between each coin — keeps burst rate ≤ ~6 req/s (2 calls per coin)
-    await new Promise(r => setTimeout(r, 300));
+    // 400ms stagger now (4 parallel calls per coin: 15m+1H+4H candles + order book)
+    await new Promise(r => setTimeout(r, 400));
   }
 }
 
@@ -3214,7 +3343,7 @@ function closeDeep() {
 }
 
 function doRefresh() {
-  S.signals = {}; S.cache = {}; S.newsCache = {}; S.countdown = 30;
+  S.signals = {}; S.mtf = {}; S.cache = {}; S.newsCache = {}; S.countdown = 30;
   document.getElementById('cdNum').textContent = '30';
   document.getElementById('screenerBody').innerHTML =
     '<div class="state-banner"><div class="spinner"></div><span>Fetching market data…</span></div>';
