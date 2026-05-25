@@ -471,6 +471,30 @@ table.cpd tr.cpd-hit td{background:var(--gdim);color:var(--g);font-weight:700;bo
   .whale-table th:nth-child(4),.whale-table td:nth-child(4){display:none}
 }
 
+/* === TRADING DNA PANEL === */
+.dna-empty{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:60px 24px;text-align:center}
+.dna-wrap{padding:14px 16px;display:flex;flex-direction:column;gap:14px;overflow-y:auto;max-height:calc(100vh - 100px)}
+.dna-stats-row{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+.dna-stat{background:var(--b2);border:1px solid var(--bd);border-radius:8px;padding:12px 14px;display:flex;flex-direction:column;gap:3px}
+.dna-stat-val{font-size:1.25rem;font-weight:800;font-family:var(--mono);line-height:1.1}
+.dna-stat-label{font-size:.64rem;text-transform:uppercase;letter-spacing:.08em;color:var(--td);font-weight:700;margin-top:2px}
+.dna-stat-sub{font-size:.67rem;color:var(--ts)}
+.dna-section-title{font-size:.68rem;text-transform:uppercase;letter-spacing:.1em;color:var(--td);font-weight:700;padding-bottom:4px;border-bottom:1px solid var(--bd)}
+.dna-insights{display:flex;flex-direction:column;gap:6px}
+.dna-insight{display:flex;align-items:center;gap:9px;background:var(--b2);border:1px solid var(--bd);border-radius:6px;padding:8px 12px;font-size:.8rem;color:var(--t)}
+.dna-insight-icon{font-size:.95rem;flex-shrink:0}
+.dna-dir-box{display:flex;flex-direction:column;gap:10px;background:var(--b2);border:1px solid var(--bd);border-radius:8px;padding:12px 14px}
+.dna-dir-row{display:flex;align-items:center;gap:8px}
+.dna-score-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}
+.dna-score-card{background:var(--b2);border:1px solid var(--bd);border-radius:8px;padding:12px 14px;text-align:center}
+.dna-score-val{font-size:1.4rem;font-weight:800;font-family:var(--mono)}
+.dna-score-lbl{font-size:.63rem;text-transform:uppercase;letter-spacing:.08em;color:var(--td);font-weight:700;margin-top:3px}
+.dna-score-sub{font-size:.67rem;color:var(--ts);margin-top:2px}
+@media(max-width:768px){
+  .dna-stats-row{grid-template-columns:repeat(2,1fr)}
+  .dna-wrap{max-height:none}
+}
+
 /* === MULTI-TIMEFRAME DOTS === */
 .mtf-wrap{display:flex;flex-direction:column;align-items:center;gap:3px}
 .mtf-lbls{display:flex;gap:5px}
@@ -2099,8 +2123,162 @@ function _renderWhaleTable({ rows, topCount, ts }) {
   <div class="whale-footer">* Aggregated open positions from top ${topCount} Hyperliquid traders (ranked by 30d PnL). Cached 5 min. Not financial advice.</div>`;
 }
 function renderDna() {
-  document.getElementById('screenerBody').innerHTML =
-    '<div class="state-banner"><div class="spinner"></div><span>載入中…</span></div>';
+  const body   = document.getElementById('screenerBody');
+  const closed = S.journal.filter(t => t.status === 'closed' && t.realizedPnL !== null);
+
+  if (closed.length === 0) {
+    body.innerHTML = `
+    <div class="dna-empty">
+      <div style="font-size:2.4rem;margin-bottom:12px">🪞</div>
+      <div style="font-weight:700;font-size:1rem;color:var(--t);margin-bottom:8px">Your Trading DNA</div>
+      <div style="color:var(--ts);font-size:.82rem;line-height:1.6;max-width:260px">
+        Close trades in the 📒 Journal to unlock your personal analytics — win rates, best coins, signal correlation and more.
+      </div>
+    </div>`;
+    return;
+  }
+
+  // ── Core stats ──────────────────────────────────────────────────
+  const n    = closed.length;
+  const wins = closed.filter(t => t.realizedPnL > 0);
+  const loss = closed.filter(t => t.realizedPnL <= 0);
+  const wr   = wins.length / n * 100;
+  const totalPnL = closed.reduce((s, t) => s + t.realizedPnL, 0);
+  const avgWin   = wins.length ? wins.reduce((s, t) => s + t.realizedPnL, 0) / wins.length : 0;
+  const avgLoss  = loss.length ? Math.abs(loss.reduce((s, t) => s + t.realizedPnL, 0)) / loss.length : 0;
+  const pf       = avgLoss > 0 ? avgWin / avgLoss : (avgWin > 0 ? 99 : 0);
+
+  // Current streak (journal is newest-first)
+  let streak = 0, streakKind = '';
+  for (const t of closed) {
+    const w = t.realizedPnL > 0;
+    if (!streak)                             { streak = 1; streakKind = w ? 'W' : 'L'; }
+    else if ((w && streakKind === 'W') || (!w && streakKind === 'L')) streak++;
+    else break;
+  }
+
+  // ── Direction breakdown ──────────────────────────────────────────
+  const byDir = { LONG: { n:0, w:0 }, SHORT: { n:0, w:0 } };
+  closed.forEach(t => { const d = byDir[t.direction]; if (d) { d.n++; if (t.realizedPnL > 0) d.w++; } });
+  const longWr  = byDir.LONG.n  > 0 ? byDir.LONG.w  / byDir.LONG.n  * 100 : null;
+  const shortWr = byDir.SHORT.n > 0 ? byDir.SHORT.w / byDir.SHORT.n * 100 : null;
+
+  // ── By coin ─────────────────────────────────────────────────────
+  const byCoin = {};
+  closed.forEach(t => {
+    if (!byCoin[t.coin]) byCoin[t.coin] = { w:0, n:0, pnl:0 };
+    byCoin[t.coin].n++;  byCoin[t.coin].pnl += t.realizedPnL;
+    if (t.realizedPnL > 0) byCoin[t.coin].w++;
+  });
+  const coinRows = Object.entries(byCoin)
+    .map(([coin, d]) => ({ coin, wr: d.w / d.n * 100, n: d.n, pnl: d.pnl }))
+    .sort((a, b) => b.pnl - a.pnl)
+    .slice(0, 5);
+
+  // ── Signal score correlation ─────────────────────────────────────
+  const withScore = closed.filter(t => t.signalScore !== null);
+  const hiScore   = withScore.filter(t => t.signalScore >= 60);
+  const loScore   = withScore.filter(t => t.signalScore < 60);
+  const hiWr = hiScore.length >= 2 ? hiScore.filter(t => t.realizedPnL > 0).length / hiScore.length * 100 : null;
+  const loWr = loScore.length >= 2 ? loScore.filter(t => t.realizedPnL > 0).length / loScore.length * 100 : null;
+
+  // ── Insights ────────────────────────────────────────────────────
+  const insights = [];
+  if (wr >= 65)      insights.push({ icon:'✅', text: 'Win rate ' + wr.toFixed(0) + '% — setups are dialled in' });
+  else if (wr < 40)  insights.push({ icon:'⚠️', text: 'Win rate ' + wr.toFixed(0) + '% — tighten signal filters' });
+  if (pf >= 2)       insights.push({ icon:'💪', text: 'Profit factor ' + (pf >= 99 ? '∞' : pf.toFixed(1)) + '× — winners far outpace losses' });
+  else if (pf < 1 && loss.length > 1) insights.push({ icon:'⚠️', text: 'Losers outpace winners — review exit or sizing' });
+  if (longWr !== null && shortWr !== null && Math.abs(longWr - shortWr) >= 20) {
+    if (longWr > shortWr) insights.push({ icon:'📈', text: 'Longs outperform Shorts by ' + (longWr - shortWr).toFixed(0) + '% — lean long' });
+    else                  insights.push({ icon:'📉', text: 'Shorts outperform Longs by ' + (shortWr - longWr).toFixed(0) + '% — lean short' });
+  }
+  if (streak >= 3)   insights.push({ icon: streakKind === 'W' ? '🔥' : '🧊', text: streak + '-trade ' + (streakKind === 'W' ? 'win' : 'loss') + ' streak active' });
+  if (hiWr !== null && loWr !== null) {
+    if (hiWr > loWr + 15) insights.push({ icon:'🎯', text: 'High scores (≥60) win ' + (hiWr - loWr).toFixed(0) + '% more — trust the signal' });
+    else if (loWr > hiWr + 10) insights.push({ icon:'🤔', text: 'Low-score trades winning more — investigate signal logic' });
+  }
+  if (!insights.length) insights.push({ icon:'📊', text: 'Log more trades to unlock deeper patterns' });
+
+  // ── Helpers ─────────────────────────────────────────────────────
+  const col  = v => v >= 55 ? 'var(--g)' : v < 45 ? 'var(--r)' : 'var(--t)';
+  const pCol = v => v >= 0 ? 'var(--g)' : 'var(--r)';
+  const fUSD = v => (v >= 0 ? '+$' : '-$') + Math.abs(v).toFixed(0);
+
+  const statCard = (lbl, val, sub, c) =>
+    `<div class="dna-stat">
+      <div class="dna-stat-val" style="color:${c}">${val}</div>
+      <div class="dna-stat-label">${lbl}</div>
+      ${sub ? `<div class="dna-stat-sub">${sub}</div>` : ''}
+    </div>`;
+
+  const dirBar = (dir, d) => {
+    if (!d.n) return '';
+    const dWr = d.w / d.n * 100, c = dir === 'LONG' ? 'var(--g)' : 'var(--r)';
+    return `<div class="dna-dir-row">
+      <span style="color:${c};font-weight:700;font-size:.78rem;width:54px">${dir === 'LONG' ? '▲' : '▼'} ${dir}</span>
+      <div style="flex:1;height:6px;background:var(--b);border-radius:3px;overflow:hidden">
+        <div style="width:${dWr.toFixed(1)}%;height:100%;background:${c};border-radius:3px"></div>
+      </div>
+      <span style="font-size:.77rem;color:${c};width:36px;text-align:right">${dWr.toFixed(0)}%</span>
+      <span style="font-size:.7rem;color:var(--td);width:28px;text-align:right">${d.n}T</span>
+    </div>`;
+  };
+
+  const coinTableRows = coinRows.map(r =>
+    `<tr>
+      <td style="font-family:var(--mono);font-weight:700">${r.coin}</td>
+      <td style="color:var(--td)">${r.n}</td>
+      <td style="color:${col(r.wr)}">${r.wr.toFixed(0)}%</td>
+      <td style="color:${pCol(r.pnl)}">${fUSD(r.pnl)}</td>
+    </tr>`
+  ).join('');
+
+  const scoreSection = (hiWr !== null || loWr !== null) ? `
+    <div class="dna-section-title">Signal Score Effect</div>
+    <div class="dna-score-grid">
+      ${hiScore.length >= 2 ? `<div class="dna-score-card">
+        <div class="dna-score-val" style="color:${col(hiWr)}">${hiWr.toFixed(0)}%</div>
+        <div class="dna-score-lbl">Win Rate</div>
+        <div class="dna-score-sub">Score ≥60 · ${hiScore.length} trades</div>
+      </div>` : ''}
+      ${loScore.length >= 2 ? `<div class="dna-score-card">
+        <div class="dna-score-val" style="color:${col(loWr)}">${loWr.toFixed(0)}%</div>
+        <div class="dna-score-lbl">Win Rate</div>
+        <div class="dna-score-sub">Score &lt;60 · ${loScore.length} trades</div>
+      </div>` : ''}
+    </div>` : '';
+
+  body.innerHTML = `
+  <div class="dna-wrap">
+    <div class="dna-stats-row">
+      ${statCard('Win Rate',      wr.toFixed(0) + '%',                       wins.length + 'W / ' + loss.length + 'L of ' + n, col(wr))}
+      ${statCard('Total PnL',     fUSD(totalPnL),                            '',                                                pCol(totalPnL))}
+      ${statCard('Avg Win',       '+$' + avgWin.toFixed(0),                  'Avg Loss $' + avgLoss.toFixed(0),                 'var(--g)')}
+      ${statCard('Profit Factor', pf >= 99 ? '∞' : pf.toFixed(2) + '×',     '',                                                col(pf >= 1 ? 55 : 44))}
+    </div>
+
+    <div class="dna-section-title">💡 What's Working</div>
+    <div class="dna-insights">
+      ${insights.map(i => `<div class="dna-insight"><span class="dna-insight-icon">${i.icon}</span><span>${i.text}</span></div>`).join('')}
+    </div>
+
+    <div class="dna-section-title">Direction Breakdown</div>
+    <div class="dna-dir-box">
+      ${dirBar('LONG', byDir.LONG)}
+      ${dirBar('SHORT', byDir.SHORT)}
+    </div>
+
+    ${coinRows.length > 0 ? `
+    <div class="dna-section-title">Top Coins by PnL</div>
+    <table class="whale-table">
+      <thead><tr><th>Coin</th><th>Trades</th><th>Win%</th><th>PnL</th></tr></thead>
+      <tbody>${coinTableRows}</tbody>
+    </table>` : ''}
+
+    ${scoreSection}
+
+    <div class="whale-footer">Analysing ${n} closed trade${n !== 1 ? 's' : ''} from your journal. Switch wallet to see per-address DNA.</div>
+  </div>`
 }
 
 function renderTarget() {
