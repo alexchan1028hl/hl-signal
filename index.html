@@ -149,7 +149,8 @@ table.risk td:first-child{text-align:left;color:var(--tp)}
 .guru-check-row{display:flex;align-items:baseline;gap:6px;padding:3px 0;border-bottom:1px solid var(--b)}
 .guru-check-row:last-child{border-bottom:none}
 /* ── Watchlist tabs ── */
-.s-tabs{display:flex;gap:4px}
+.s-tabs{display:flex;gap:4px;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none;padding-bottom:2px}
+.s-tabs::-webkit-scrollbar{display:none}
 .s-tab{background:transparent;border:1px solid var(--b);color:var(--ts);border-radius:6px;padding:5px 13px;cursor:pointer;font-size:.75rem;font-family:var(--mono);font-weight:600;letter-spacing:.04em;transition:all .15s}
 .s-tab:hover{border-color:var(--bhl);color:var(--tp)}
 .s-tab.active{background:var(--bl);border-color:var(--bl);color:#fff}
@@ -426,6 +427,34 @@ table.cpd tr.cpd-hit td{background:var(--gdim);color:var(--g);font-weight:700;bo
 .donate-close-btn{width:100%;background:var(--card);border:1px solid var(--b);color:var(--ts);border-radius:7px;padding:9px;cursor:pointer;font-size:.78rem;font-family:var(--mono);transition:all .15s}
 .donate-close-btn:hover{border-color:var(--bhl);color:var(--tp)}
 
+/* ═══════════════════════════════════════════════════════
+   CARRY SCOUT TAB
+   ═══════════════════════════════════════════════════════ */
+.carry-wrap{padding:14px 16px}
+.carry-intro{font-size:.72rem;color:var(--ts);margin-bottom:12px;line-height:1.5;padding:10px 12px;background:var(--card);border-radius:7px;border-left:3px solid var(--g)}
+.carry-table{width:100%;border-collapse:collapse}
+.carry-table th{font-size:.65rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--td);padding:6px 10px;border-bottom:1px solid var(--b);text-align:left;white-space:nowrap}
+.carry-table td{padding:9px 10px;border-bottom:1px solid var(--b);font-size:.8rem;vertical-align:middle}
+.carry-table tr:hover td{background:var(--hover)}
+.carry-table .coin-cell{font-family:var(--mono);font-weight:700;color:var(--tp)}
+.carry-table .coin-sub{font-size:.67rem;color:var(--td);font-weight:400}
+.carry-apr{font-family:var(--mono);font-weight:700}
+.carry-dir{font-size:.7rem;padding:2px 7px;border-radius:4px;white-space:nowrap;font-weight:600}
+.carry-dir.short-pays{background:rgba(0,200,150,.12);color:var(--g)}
+.carry-dir.long-pays{background:rgba(255,71,87,.12);color:var(--r)}
+.carry-score{display:inline-flex;align-items:center;gap:5px;font-size:.72rem;font-weight:700;padding:3px 8px;border-radius:5px;white-space:nowrap}
+.carry-score.extreme{background:rgba(0,200,150,.2);color:var(--g)}
+.carry-score.strong{background:rgba(0,200,150,.1);color:var(--g)}
+.carry-score.moderate{background:rgba(255,193,7,.1);color:#ffc107}
+.carry-score.weak{background:var(--hover);color:var(--td)}
+.carry-bar-wrap{width:80px;height:5px;background:var(--b);border-radius:3px;overflow:hidden}
+.carry-bar{height:100%;border-radius:3px;transition:width .4s}
+@media(max-width:768px){
+  .carry-wrap{padding:10px}
+  .carry-table th:nth-child(4),.carry-table td:nth-child(4),
+  .carry-table th:nth-child(5),.carry-table td:nth-child(5){display:none}
+}
+
 /* === MULTI-TIMEFRAME DOTS === */
 .mtf-wrap{display:flex;flex-direction:column;align-items:center;gap:3px}
 .mtf-lbls{display:flex;gap:5px}
@@ -668,6 +697,9 @@ table.cpd tr.cpd-hit td{background:var(--gdim);color:var(--g);font-weight:700;bo
           <button class="s-tab" id="tabWatchlist">★ Watchlist <span class="wl-cnt" id="wlCount">0</span></button>
           <button class="s-tab" id="tabJournal">📒 Journal <span class="wl-cnt" id="journalCount">0</span></button>
           <button class="s-tab" id="tabTarget">🎯 Target</button>
+          <button class="s-tab" id="tabCarry">💰 Carry</button>
+          <button class="s-tab" id="tabWhales">🧠 Smart$</button>
+          <button class="s-tab" id="tabDna">🪞 DNA</button>
         </div>
         <div id="sigSummary" class="sig-summary"></div>
       </div>
@@ -1029,6 +1061,9 @@ function mkBadge(signal, score) {
 function renderScreener() {
   if (S.activeTab === 'journal') { renderJournal(); return; }
   if (S.activeTab === 'target')  { renderTarget();  return; }
+  if (S.activeTab === 'carry')   { renderCarry();   return; }
+  if (S.activeTab === 'whales')  { renderWhales();  return; }
+  if (S.activeTab === 'dna')     { renderDna();     return; }
   const { signals, selectedCoin } = S;
 
   // Filter by active tab
@@ -1841,6 +1876,80 @@ function onTgtInput() {
     lsSet('hl_target', S.targetSettings);
     renderTarget();
   }, 500);
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   CARRY SCOUT — ranks all perps by funding carry opportunity
+   Net APY = |funding/hr| × 8760 × 100  (gross annual %)
+   Breakeven = 0.07% round-trip fee / daily funding income (days)
+   ══════════════════════════════════════════════════════════════════════════ */
+function renderCarry() {
+  const body = document.getElementById('screenerBody');
+  if (!S.markets.length) {
+    body.innerHTML = '<div class="state-banner"><div class="spinner"></div><span>Loading market data…</span></div>';
+    return;
+  }
+  const HL_FEE_RT = 0.07; // 0.035% taker × 2 sides = 0.07% round-trip
+
+  const rows = S.markets
+    .map(m => {
+      const fHr      = m.funding;                              // e.g. 0.0001 = 0.01%/hr
+      const absHr    = Math.abs(fHr);
+      const aprPct   = absHr * 8760 * 100;                    // annual %
+      const daylyPct = absHr * 24 * 100;                      // daily %
+      const beDays   = daylyPct > 0 ? HL_FEE_RT / daylyPct : 9999; // days to break even
+      const isPos    = fHr >= 0;                               // positive = longs pay shorts
+      return { m, fHr, absHr, aprPct, beDays, isPos };
+    })
+    .filter(r => r.absHr > 0)
+    .sort((a, b) => b.aprPct - a.aprPct);
+
+  const scoreLabel = apr =>
+    apr >= 200 ? ['extreme','🔥 Extreme'] :
+    apr >= 100 ? ['strong', '⚡ Strong']  :
+    apr >= 50  ? ['moderate','✓ Moderate']:
+                 ['weak',   '— Weak'];
+
+  const maxApr = rows[0]?.aprPct || 1;
+
+  const tableRows = rows.map((r, i) => {
+    const [cls, lbl] = scoreLabel(r.aprPct);
+    const barW = Math.min(100, r.aprPct / maxApr * 100).toFixed(1);
+    const barCol = r.aprPct >= 100 ? 'var(--g)' : r.aprPct >= 50 ? '#ffc107' : 'var(--b2,#3a4458)';
+    const dirCls  = r.isPos ? 'long-pays'  : 'short-pays';
+    const dirText = r.isPos ? 'Longs pay ↓' : 'Shorts pay ↓';
+    const beText  = r.beDays < 1 ? '< 1 day' : r.beDays < 9999 ? r.beDays.toFixed(1) + 'd' : '—';
+    return `<tr>
+      <td><div class="coin-cell">${r.m.coin}</div><div class="coin-sub">PERP · ${r.m.maxLeverage}×</div></td>
+      <td><span class="carry-dir ${dirCls}">${dirText}</span></td>
+      <td class="carry-apr" style="color:${r.aprPct>=100?'var(--g)':r.aprPct>=50?'#ffc107':'var(--ts)'}">${r.aprPct.toFixed(1)}%</td>
+      <td style="font-family:var(--mono);font-size:.75rem;color:var(--ts)">${beText}</td>
+      <td><span class="carry-score ${cls}">${lbl}</span></td>
+      <td><div class="carry-bar-wrap"><div class="carry-bar" style="width:${barW}%;background:${barCol}"></div></div></td>
+    </tr>`;
+  }).join('');
+
+  body.innerHTML = `<div class="carry-wrap">
+    <div class="carry-intro">
+      💰 <strong>資金費率套利雷達</strong> — 正費率時做空永續合約收取費用；負費率時做多。
+      年化 &gt;100% = 強力機會，&gt;50% = 值得關注。回本天數 = 手續費多久能從費率中回收。
+    </div>
+    <table class="carry-table">
+      <thead><tr>
+        <th>幣種</th><th>方向</th><th>年化 APR</th><th>回本天數</th><th>評級</th><th>強度</th>
+      </tr></thead>
+      <tbody>${tableRows}</tbody>
+    </table>
+  </div>`;
+}
+
+function renderWhales() {
+  document.getElementById('screenerBody').innerHTML =
+    '<div class="state-banner"><div class="spinner"></div><span>載入中…</span></div>';
+}
+function renderDna() {
+  document.getElementById('screenerBody').innerHTML =
+    '<div class="state-banner"><div class="spinner"></div><span>載入中…</span></div>';
 }
 
 function renderTarget() {
@@ -3418,7 +3527,10 @@ wsConnect();
 // Screener tabs
 function _setTab(tab) {
   S.activeTab = tab;
-  const map = { tabAll:'all', tabWatchlist:'watchlist', tabJournal:'journal', tabTarget:'target' };
+  const map = {
+    tabAll:'all', tabWatchlist:'watchlist', tabJournal:'journal',
+    tabTarget:'target', tabCarry:'carry', tabWhales:'whales', tabDna:'dna'
+  };
   Object.entries(map).forEach(([id, t]) => {
     const el = document.getElementById(id);
     if (el) el.classList.toggle('active', t === tab);
@@ -3429,6 +3541,9 @@ document.getElementById('tabAll').addEventListener('click',       () => _setTab(
 document.getElementById('tabWatchlist').addEventListener('click', () => _setTab('watchlist'));
 document.getElementById('tabJournal').addEventListener('click',   () => _setTab('journal'));
 document.getElementById('tabTarget').addEventListener('click',    () => _setTab('target'));
+document.getElementById('tabCarry').addEventListener('click',     () => _setTab('carry'));
+document.getElementById('tabWhales').addEventListener('click',    () => _setTab('whales'));
+document.getElementById('tabDna').addEventListener('click',       () => _setTab('dna'));
 
 // Set initial count badges
 document.getElementById('wlCount').textContent = S.watchlist.size;
