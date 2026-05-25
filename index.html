@@ -438,6 +438,24 @@ table.cpd tr.cpd-hit td{background:var(--gdim);color:var(--g);font-weight:700;bo
 .carry-table tr:hover td{background:var(--hover)}
 .carry-table .coin-cell{font-family:var(--mono);font-weight:700;color:var(--tp)}
 .carry-table .coin-sub{font-size:.67rem;color:var(--td);font-weight:400}
+/* Column header tooltips */
+.th-tip{position:relative;cursor:help;user-select:none}
+.th-tip .tip-icon{font-size:.58rem;opacity:.55;margin-left:3px;vertical-align:middle;font-style:normal;font-weight:400;text-transform:none;letter-spacing:0}
+.th-tip::after{
+  content:attr(data-tip);
+  position:absolute;top:calc(100% + 6px);left:50%;
+  transform:translateX(-50%);
+  background:#1e2535;color:var(--t);
+  font-size:.72rem;font-weight:400;text-transform:none;letter-spacing:0;line-height:1.5;
+  padding:8px 11px;border-radius:7px;border:1px solid var(--bd);
+  width:210px;white-space:normal;
+  z-index:200;opacity:0;pointer-events:none;
+  transition:opacity .15s ease;
+  box-shadow:0 6px 20px rgba(0,0,0,.45);
+}
+.th-tip:hover::after{opacity:1}
+.th-tip.tip-left::after{left:0;transform:none}
+.th-tip.tip-right::after{left:auto;right:0;transform:none}
 .carry-apr{font-family:var(--mono);font-weight:700}
 .carry-dir{font-size:.7rem;padding:2px 7px;border-radius:4px;white-space:nowrap;font-weight:600}
 .carry-dir.short-pays{background:rgba(0,200,150,.12);color:var(--g)}
@@ -1980,7 +1998,12 @@ function renderCarry() {
     </div>
     <table class="carry-table">
       <thead><tr>
-        <th>Coin</th><th>Direction</th><th>Annual APR</th><th>Breakeven</th><th>Rating</th><th>Strength</th>
+        <th class="th-tip tip-left" data-tip="The perpetual futures contract. Sub-label shows max leverage available.">Coin <i class="tip-icon">ⓘ</i></th>
+        <th class="th-tip" data-tip="Who pays whom. 'Longs pay' → short the perp to collect fees. 'Shorts pay' → long the perp to collect fees.">Direction <i class="tip-icon">ⓘ</i></th>
+        <th class="th-tip" data-tip="Annualised funding yield = hourly rate × 8,760 × 100. Represents the theoretical annual return from holding the carry trade.">Annual APR <i class="tip-icon">ⓘ</i></th>
+        <th class="th-tip" data-tip="Days until cumulative funding collected covers the 0.07% round-trip trading fee. Shorter = faster payback. Below 1 day = near-instant recovery.">Breakeven <i class="tip-icon">ⓘ</i></th>
+        <th class="th-tip" data-tip="🔥 Extreme ≥200% APR · ⚡ Strong ≥100% · ✓ Moderate ≥50% · — Weak &lt;50%. Based purely on current funding rate.">Rating <i class="tip-icon">ⓘ</i></th>
+        <th class="th-tip tip-right" data-tip="Visual bar showing this coin's APR relative to the highest in the list. Longer bar = stronger carry opportunity.">Strength <i class="tip-icon">ⓘ</i></th>
       </tr></thead>
       <tbody>${tableRows}</tbody>
     </table>
