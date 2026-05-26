@@ -20,8 +20,8 @@
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 :root{
   /* Core palette — matched to Hyperliquid Ecosystem */
-  --bg:#0a0c13;--panel:#0d1018;--card:#111827;--hover:#1a2235;
-  --b:#1e2635;--bd:#1e2635;--bhl:#2d3748;
+  --bg:#0d0f16;--panel:#10131a;--card:#141922;--hover:#1c2333;
+  --b:#1e2736;--bd:#1e2736;--bhl:#2d3a50;
   --tp:#f0f2f8;--t:#d1d5e0;--ts:#9ca3af;--td:#6b7280;
   --g:#00d4aa;--gdim:rgba(0,212,170,.13);--r:#f05252;--rdim:rgba(240,82,82,.13);
   --y:#f59e0b;--ydim:rgba(245,158,11,.13);--bl:#6366f1;
@@ -37,10 +37,12 @@ body{background:var(--bg);color:var(--tp);font-family:var(--sans);min-height:100
 /* Layout */
 #app{display:grid;grid-template-rows:auto auto 1fr;height:100vh}
 #topbar{display:flex;align-items:center;justify-content:space-between;padding:0 20px;min-height:54px;background:var(--panel);border-bottom:1px solid var(--b);z-index:100;flex-wrap:wrap;gap:8px}
-.logo{font-family:var(--mono);font-size:1.05rem;font-weight:700;letter-spacing:.06em;color:var(--g);display:flex;align-items:center;gap:6px}
-.logo-sep{color:var(--bhl);font-weight:300;font-size:1.1rem}
-.logo span{color:var(--ts);font-weight:400;font-size:.95rem}
-.logo-sub{font-size:.7rem;margin-left:10px;font-weight:400;color:var(--td)}
+/* ── Logo — sharp badge treatment ── */
+.logo{display:flex;align-items:center;gap:10px;flex-shrink:0}
+.logo-mark{background:var(--g);color:#0b0d14;font-family:var(--mono);font-weight:900;font-size:.9rem;letter-spacing:.12em;padding:5px 10px;border-radius:6px;line-height:1.15;flex-shrink:0;box-shadow:0 0 18px rgba(0,212,170,.28),0 0 6px rgba(0,212,170,.15)}
+.logo-right{display:flex;flex-direction:column;gap:1px;line-height:1}
+.logo-name{font-family:var(--mono);font-size:.98rem;font-weight:700;color:var(--tp);letter-spacing:.07em}
+.logo-tag{font-size:.57rem;color:var(--td);letter-spacing:.14em;text-transform:uppercase;font-family:var(--sans);font-weight:500;margin-top:1px}
 .controls{display:flex;align-items:center;gap:12px}
 .port-wrap{display:flex;align-items:center;gap:8px;background:var(--card);border:1px solid var(--b);border-radius:6px;padding:5px 10px}
 .port-wrap label{font-size:.78rem;color:var(--ts);white-space:nowrap}
@@ -546,7 +548,7 @@ table.cpd tr.cpd-hit td{background:var(--gdim);color:var(--g);font-weight:700;bo
   /* Topbar: two-row compact layout */
   #topbar>div:first-child{flex:1 0 100%;display:flex;align-items:center;justify-content:space-between;gap:8px}
   .controls{flex:1 0 100%;flex-wrap:wrap;gap:6px;justify-content:flex-start}
-  .logo-sub{display:none}
+  .logo-tag{display:none}
   #portInput{width:72px}
   .wallet-wrap{flex:1 1 0;min-width:0}
   #walletInput{width:0;min-width:0;flex:1}
@@ -671,7 +673,13 @@ table.cpd tr.cpd-hit td{background:var(--gdim);color:var(--g);font-weight:700;bo
 <div id="app">
   <header id="topbar">
     <div style="display:flex;align-items:center;gap:14px">
-      <div class="logo">HL<span>-SIGNAL</span><span class="logo-sub">perpetuals screener</span></div>
+      <div class="logo">
+        <span class="logo-mark">HL</span>
+        <div class="logo-right">
+          <span class="logo-name">SIGNAL</span>
+          <span class="logo-tag">Perpetuals Screener</span>
+        </div>
+      </div>
       <div class="port-wrap">
         <label for="portInput">Portfolio</label>
         <input type="text" id="portInput" value="1300" autocomplete="off" />
