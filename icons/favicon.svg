@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <defs>
+    <filter id="glow" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="2" result="blur"/>
+      <feFlood flood-color="#50d2c1" flood-opacity="0.4" result="color"/>
+      <feComposite in="color" in2="blur" operator="in" result="shadow"/>
+      <feMerge><feMergeNode in="shadow"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+  <!-- Dark teal background matching --bg -->
+  <rect width="32" height="32" rx="7" fill="#061515"/>
+  <!-- Green badge block -->
+  <rect x="3" y="3" width="26" height="26" rx="5" fill="#50d2c1" filter="url(#glow)"/>
+  <!-- HL text in dark -->
+  <text
+    x="16" y="23"
+    font-family="'JetBrains Mono',monospace,sans-serif"
+    font-weight="900"
+    font-size="16"
+    fill="#061515"
+    text-anchor="middle"
+    letter-spacing="1"
+  >HL</text>
+</svg>
