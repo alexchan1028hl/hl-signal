@@ -1,11 +1,11 @@
-/* HL-SIGNAL Service Worker v2.0
+/* HL-SIGNAL Service Worker v3.0
    Strategy:
    - HTML (index.html) → network-first, cache:'no-cache' → always latest without hard refresh
    - External CDN      → network-first, cache fallback   → fast with offline support
    - Icons / manifest  → cache-first                     → instant load, rarely changes
    - HL API / stats    → network-only                    → live data, never cache
 */
-const CACHE = 'hl-signal-v2.0';
+const CACHE = 'hl-signal-v3.0';
 
 const SHELL = [
   './',
@@ -15,6 +15,7 @@ const SHELL = [
   './icons/icon-512.png',
   './icons/apple-touch-icon.png',
   './icons/favicon.png',
+  './icons/favicon.svg',
 ];
 
 /* Install: pre-cache shell, activate immediately without waiting for old tabs */
